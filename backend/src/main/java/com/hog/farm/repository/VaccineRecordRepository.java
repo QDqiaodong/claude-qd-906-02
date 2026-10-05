@@ -9,4 +9,13 @@ public interface VaccineRecordRepository extends JpaRepository<VaccineRecord, Lo
     List<VaccineRecord> findAllByOrderByVaccineDateDescIdDesc();
 
     List<VaccineRecord> findByPigIdOrderByVaccineDateDesc(Long pigId);
+
+    /** 等效接种记录判定：同一猪只同一疫苗的历史记录（按日期升序做贪心匹配） */
+    List<VaccineRecord> findByPigIdAndVaccineNameOrderByVaccineDateAscIdAsc(Long pigId, String vaccineName);
+
+    List<VaccineRecord> findByRequestNoOrderByIdAsc(String requestNo);
+
+    boolean existsByRequestNo(String requestNo);
+
+    boolean existsByTaskId(Long taskId);
 }

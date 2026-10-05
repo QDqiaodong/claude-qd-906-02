@@ -274,6 +274,155 @@ public final class Views {
         private String operator;
         private String remark;
         private Boolean overdue;
+        /** 来源免疫计划 / 剂次（手工登记为 null） */
+        private Long planId;
+        private String planCode;
+        private Integer doseNo;
+    }
+
+    /** 免疫计划规则行 */
+    @Data
+    public static class ImmunePlanVO {
+        private Long id;
+        private String planCode;
+        private String vaccineName;
+        private String stage;
+        private String stageName;
+        private Integer firstDoseAgeDays;
+        private Integer doseIntervalDays;
+        private Integer totalDoses;
+        private Integer graceDays;
+        private BigDecimal doseMl;
+        private String status;
+        private String statusName;
+        private String note;
+        /** 未完成（待接种 + 漏种）任务数 */
+        private Integer openTaskCount = 0;
+        /** 漏种任务数 */
+        private Integer missedTaskCount = 0;
+    }
+
+    /** 接种任务行：计划日期、当前剂次、归属栏位、形成依据都直接展示 */
+    @Data
+    public static class ImmuneTaskVO {
+        private Long id;
+        private Long planId;
+        private String planCode;
+        private String vaccineName;
+        private Long pigId;
+        private String earTag;
+        /** 当前剂次与总剂次 */
+        private Integer doseNo;
+        private Integer totalDoses;
+        private String plannedDate;
+        private Integer graceDays;
+        private String status;
+        private String statusName;
+        /** 看板分组：DUE 待接种 / DUE_SOON 临期 / MISSED 漏种 / MADE_UP 已补种 / DONE 已完成 / TERMINATED 已终止 */
+        private String groupKey;
+        private String groupName;
+        /** 归属栏位（当前台账栏位；猪只转栏后跟随新栏位） */
+        private Long penId;
+        private String penCode;
+        private String houseCode;
+        /** 形成依据：日期推算链 */
+        private String basis;
+        /** 逾期天数 = 今天（或完成日）- 计划日期，<= 0 时为 0 */
+        private Long overdueDays = 0L;
+        private String terminateReason;
+        private String terminateReasonName;
+        private String terminatedAt;
+        private String makeUpDate;
+        private String makeUpReason;
+        private String completedDate;
+        private Long vaccineRecordId;
+        private String requestNo;
+    }
+
+    /** 看板分组 */
+    @Data
+    public static class ImmuneTaskGroupVO {
+        private String key;
+        private String name;
+        private List<ImmuneTaskVO> tasks = new ArrayList<>();
+    }
+
+    /** 免疫计划看板：分组任务 + 执行口径说明 */
+    @Data
+    public static class ImmuneBoardVO {
+        private List<ImmuneTaskGroupVO> groups = new ArrayList<>();
+        private Integer total = 0;
+        /** 执行口径（生成时名单快照），前端直接展示 */
+        private String policyNote;
+    }
+
+    /** 生成预检 / 生成结果中的一头猪的处置决定 */
+    @Data
+    public static class ImmuneDecisionVO {
+        private Long pigId;
+        private String earTag;
+        /** INCLUDED 纳入 / DEFERRED 暂缓 / NOT_APPLICABLE 不再适用 */
+        private String decision;
+        private String decisionName;
+        /** 人类可读原因（为什么纳入 / 暂缓 / 不再适用） */
+        private String reason;
+        /** 纳入时涉及的计划剂次 */
+        private List<DoseSlotVO> doses = new ArrayList<>();
+    }
+
+    /** 一个计划剂次的日期槽 */
+    @Data
+    public static class DoseSlotVO {
+        private Integer doseNo;
+        private String plannedDate;
+        /** 任务是否已存在（重复生成时跳过，不产生重复任务） */
+        private Boolean existed = Boolean.FALSE;
+    }
+
+    /** 生成预检 / 生成结果 */
+    @Data
+    public static class ImmuneGenerateVO {
+        private Long planId;
+        private String planCode;
+        /** 是否已真正落库（false = 仅预检） */
+        private Boolean generated = Boolean.FALSE;
+        private Integer includedCount = 0;
+        private Integer deferredCount = 0;
+        private Integer notApplicableCount = 0;
+        private Integer createdTaskCount = 0;
+        private List<ImmuneDecisionVO> items = new ArrayList<>();
+    }
+
+    /** 批量确认中单个任务的处置结果（局部失败时其余结果仍可核对） */
+    @Data
+    public static class ImmuneTaskResultVO {
+        private Long taskId;
+        private Long pigId;
+        private String earTag;
+        private String planCode;
+        private Integer doseNo;
+        /** DONE / MADE_UP / ALREADY / TERMINATED / FAILED */
+        private String result;
+        private String resultName;
+        private String message;
+        private Long vaccineRecordId;
+        private String plannedDate;
+        private Long overdueDays;
+    }
+
+    /** 批量确认结果 */
+    @Data
+    public static class ImmuneConfirmResultVO {
+        private String requestNo;
+        /** 是否为同一 requestNo 的幂等回放（未产生新记录） */
+        private Boolean replay = Boolean.FALSE;
+        private Integer totalCount = 0;
+        private Integer doneCount = 0;
+        private Integer madeUpCount = 0;
+        private Integer terminatedCount = 0;
+        private Integer failedCount = 0;
+        private Integer alreadyCount = 0;
+        private List<ImmuneTaskResultVO> results = new ArrayList<>();
     }
 
     /** 休药期状态 */

@@ -92,6 +92,22 @@ const trace = {
   targetOptions: (targetType) => call(http.get('/trace/target-options', { params: { targetType } }))
 }
 
+const immune = {
+  plans: () => call(http.get('/immune/plan/list')),
+  createPlan: (data) => call(http.post('/immune/plan', data)),
+  planStatus: (id, status) => call(http.post(`/immune/plan/${id}/status?status=${encodeURIComponent(status)}`)),
+  /** 生成预检：逐头解释 纳入 / 暂缓 / 不再适用 的原因，不落库 */
+  preview: (id) => call(http.get(`/immune/plan/${id}/preview`)),
+  /** 生成到期接种任务（生成时名单快照） */
+  generate: (id) => call(http.post(`/immune/plan/${id}/generate`)),
+  /** 看板：待接种 / 临期 / 漏种 / 已补种 / 已完成 / 已终止 分组 */
+  board: () => call(http.get('/immune/board')),
+  /** 猪只详情追溯：该猪只的全部接种任务 */
+  tasks: (pigId) => call(http.get('/immune/task/list', { params: { pigId } })),
+  /** 批量确认接种：一次多头，局部失败可核对，requestNo 幂等 */
+  confirm: (data) => call(http.post('/immune/task/confirm', data))
+}
+
 const stats = {
   overview: () => call(http.get('/stats/overview')),
   houseType: () => call(http.get('/stats/house-type')),
@@ -100,4 +116,4 @@ const stats = {
   dict: () => call(http.get('/stats/dict'))
 }
 
-export default { http, house, pig, batch, medication, transfer, trace, stats }
+export default { http, house, pig, batch, medication, transfer, trace, immune, stats }

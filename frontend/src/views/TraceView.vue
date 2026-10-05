@@ -254,6 +254,12 @@ onMounted(async () => {
           <el-table-column prop="doseMl" label="剂量 ml" width="78" />
           <el-table-column prop="vaccineDate" label="免疫日" width="105" />
           <el-table-column prop="nextDate" label="下次" width="105" />
+          <el-table-column label="来源计划" width="110">
+            <template #default="{ row }">
+              <el-tag v-if="row.planCode" size="small" type="success">{{ row.planCode }} · 第 {{ row.doseNo }} 剂</el-tag>
+              <span v-else style="font-size: 12px; color: var(--ink-dim)">手工登记</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="operator" label="免疫员" width="85" />
         </el-table>
 

@@ -7,9 +7,10 @@ import HouseView from './views/HouseView.vue'
 import PigView from './views/PigView.vue'
 import BatchView from './views/BatchView.vue'
 import TransferView from './views/TransferView.vue'
+import ImmuneView from './views/ImmuneView.vue'
 import TraceView from './views/TraceView.vue'
 
-// 底部悬浮 Dock：5 个圆形图标按钮，hover / 选中时抬起并显示文字标签
+// 底部悬浮 Dock：6 个圆形图标按钮，hover / 选中时抬起并显示文字标签
 const modules = [
   {
     key: 'house',
@@ -36,6 +37,12 @@ const modules = [
     svg: '<svg class="dock-svg" viewBox="0 0 24 24"><path d="M4 8.5h11"/><path d="M11.5 5.5 15 8.5l-3.5 3"/><path d="M20 15.5H9"/><path d="M12.5 12.5 9 15.5l3.5 3"/></svg>'
   },
   {
+    key: 'immune',
+    label: '防疫',
+    path: '/immune',
+    svg: '<svg class="dock-svg" viewBox="0 0 24 24"><path d="M8 3.5h8"/><path d="M10 3.5v4L5.6 16a3.4 3.4 0 0 0 3 5h6.8a3.4 3.4 0 0 0 3-5L14 7.5v-4"/><path d="M7.5 14.5h9"/><path d="M12 17.2h.01"/></svg>'
+  },
+  {
     key: 'trace',
     label: '溯源',
     path: '/trace',
@@ -49,6 +56,7 @@ const viewMap = {
   '/pig': PigView,
   '/batch': BatchView,
   '/transfer': TransferView,
+  '/immune': ImmuneView,
   '/trace': TraceView
 }
 

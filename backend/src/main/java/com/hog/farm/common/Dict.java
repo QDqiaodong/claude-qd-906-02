@@ -153,6 +153,47 @@ public final class Dict {
             "USED_UP", "用完",
             "SCRAPPED", "报废");
 
+    // ---------------- 免疫计划：适用生长阶段 ----------------
+    // 按日龄划分；计划可指定某一阶段或 ALL（全阶段）
+    private static final Map<String, String> GROWTH_STAGE = Map.of(
+            "SUCKLING", "哺乳仔猪",
+            "NURSERY", "保育猪",
+            "GROWER", "育成猪",
+            "FINISHING", "育肥猪",
+            "BREEDING", "种用猪");
+
+    /** 计划适用阶段 = 五个生长阶段 + ALL 全阶段 */
+    private static final Map<String, String> PLAN_STAGE = Map.of(
+            "ALL", "全阶段",
+            "SUCKLING", "哺乳仔猪",
+            "NURSERY", "保育猪",
+            "GROWER", "育成猪",
+            "FINISHING", "育肥猪",
+            "BREEDING", "种用猪");
+
+    // ---------------- 免疫任务状态 ----------------
+    // PENDING 待接种 / MISSED 漏种（超过宽限期）/ DONE 已完成 / MADE_UP 已补种 / TERMINATED 已终止
+    private static final Map<String, String> IMMUNE_TASK_STATUS = Map.of(
+            "PENDING", "待接种",
+            "MISSED", "漏种",
+            "DONE", "已完成",
+            "MADE_UP", "已补种",
+            "TERMINATED", "已终止");
+
+    /** 任务终止原因（可追溯）：终态猪只 / 已有等效接种记录 / 计划停用 */
+    private static final Map<String, String> IMMUNE_TERMINATE_REASON = Map.of(
+            "PIG_DEAD", "猪只死亡",
+            "PIG_SOLD", "猪只已出栏",
+            "PIG_CULLED", "猪只已淘汰",
+            "EQUIVALENT", "已有等效接种记录",
+            "PLAN_DISABLED", "计划已停用");
+
+    /** 临期窗口（天）：计划日期距今不超过该天数的待接种任务进入「临期」分组 */
+    public static final int IMMUNE_DUE_SOON_DAYS = 3;
+
+    /** 生成窗口（天）：只生成计划日期在今天 + 该天数以内的任务，更远的剂次暂缓 */
+    public static final int IMMUNE_GENERATE_HORIZON_DAYS = 30;
+
     // ---------------- 疫苗名录 ----------------
     public static final List<String> VACCINES = List.of(
             "猪瘟活疫苗", "口蹄疫 O 型灭活疫苗", "伪狂犬病活疫苗",
@@ -352,11 +393,54 @@ public final class Dict {
         return name(FEED_STATUS, status);
     }
 
-    public static boolean isValidTraceType(String type) {
-        return type != null && TRACE_TYPE.containsKey(type);
+    /** 按日龄划分的生长阶段：0-28 哺乳 / 29-70 保育 / 71-120 育成 / 121-200 育肥 / >200 种用 */
+    public static String growthStageOf(long ageInDays) {
+        if (ageInDays <= 28) {
+            return "SUCKLING";
+        }
+        if (ageInDays <= 70) {
+            return "NURSERY";
+        }
+        if (ageInDays <= 120) {
+            return "GROWER";
+        }
+        if (ageInDays <= 200) {
+            return "FINISHING";
+        }
+        return "BREEDING";
     }
 
-    public static String traceTypeName(String type) {
+    public static String growthStageName(String stage) {
+        return name(GROWTH_STAGE, stage);
+    }
+
+    public static boolean isValidPlanStage(String stage) {
+        return stage != null && PLAN_STAGE.containsKey(stage);
+    }
+
+    public static String planStageName(String stage) {
+        return name(PLAN_STAGE, stage);
+    }
+
+    public static boolean isValidImmuneTaskStatus(String status) {
+        return status != null && IMMUNE_TASK_STATUS.containsKey(status);
+    }
+
+    public static String immuneTaskStatusName(String status) {
+        return name(IMMUNE_TASK_STATUS, status);
+    }
+
+    public static boolean isValidImmuneTerminateReason(String reason) {
+        return reason != null && IMMUNE_TERMINATE_REASON.containsKey(reason);
+    }
+
+    public static String immuneTerminateReasonName(String reason) {
+        return name(IMMUNE_TERMINATE_REASON, reason);
+    }
+
+    public static boolean isValidTraceType(String type) {
+        return type != null && TRACE_TYPE.containsKey(type);
+    }    public static String traceTypeName(String type) {
         return name(TRACE_TYPE, type);
     }
 

@@ -33,6 +33,21 @@ const batchPenId = ref(null)
 const medDialog = ref(false)
 const medSaving = ref(false)
 const medForm = ref(emptyMedication())
+const immuneDialog = ref(false)
+const immunePig = ref(null)
+const immuneTasks = ref([])
+
+// 猪只详情追溯：该猪只的免疫计划任务（含计划、剂次、形成依据）
+async function openImmune (pig) {
+  immunePig.value = pig
+  immuneDialog.value = true
+  immuneTasks.value = []
+  try {
+    immuneTasks.value = await api.immune.tasks(pig.id)
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
 
 function emptyMedication () {
   return {
@@ -261,7 +276,7 @@ onMounted(load)
           <span v-else-if="pig.withdrawal?.deadline" class="tag" style="border-color: var(--hog-green); color: var(--hog-green)">
             {{ pig.withdrawal.earliestShipDate }} 可出栏
           </span>
-          <el-dropdown trigger="click" @command="(c) => c === 'edit' ? openEdit(pig) : c === 'del' ? removePig(pig) : changeOne(pig, c)">
+          <el-dropdown trigger="click" @command="(c) => c === 'edit' ? openEdit(pig) : c === 'del' ? removePig(pig) : c === 'immune' ? openImmune(pig) : changeOne(pig, c)">
             <el-button size="small" link>操作</el-button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -269,7 +284,8 @@ onMounted(load)
                 <el-dropdown-item command="SOLD">标记出栏</el-dropdown-item>
                 <el-dropdown-item command="DEAD">标记死亡</el-dropdown-item>
                 <el-dropdown-item command="CULLED">标记淘汰</el-dropdown-item>
-                <el-dropdown-item command="edit" divided>编辑</el-dropdown-item>
+                <el-dropdown-item command="immune" divided>免疫计划</el-dropdown-item>
+                <el-dropdown-item command="edit">编辑</el-dropdown-item>
                 <el-dropdown-item command="del">删除</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -407,6 +423,42 @@ onMounted(load)
       <template #footer>
         <el-button @click="medDialog = false">取消</el-button>
         <el-button type="primary" :loading="medSaving" @click="submitMedication">保存用药登记</el-button>
+      </template>
+    </el-dialog>
+    <!-- 猪只免疫计划追溯 -->
+    <el-dialog v-model="immuneDialog" :title="`免疫计划追溯 · ${immunePig?.earTag || ''}`" width="760px">
+      <el-table :data="immuneTasks" size="small" max-height="420" v-loading="!immuneTasks.length">
+        <el-table-column prop="planCode" label="计划" width="90" />
+        <el-table-column prop="vaccineName" label="疫苗" width="150" />
+        <el-table-column label="剂次" width="90">
+          <template #default="{ row }">第 {{ row.doseNo }}/{{ row.totalDoses }} 剂</template>
+        </el-table-column>
+        <el-table-column prop="plannedDate" label="计划日期" width="100" />
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag size="small"
+                    :type="{ PENDING: 'warning', MISSED: 'danger', DONE: 'success', MADE_UP: 'success', TERMINATED: 'info' }[row.status]">
+              {{ row.statusName }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="penCode" label="栏位" width="110" />
+        <el-table-column label="明细" min-width="220">
+          <template #default="{ row }">
+            <div style="font-size: 12px">
+              <template v-if="row.status === 'MADE_UP'">补种 {{ row.makeUpDate }}（{{ row.makeUpReason }}），逾期 {{ row.overdueDays }} 天</template>
+              <template v-else-if="row.status === 'DONE'">完成于 {{ row.completedDate }}</template>
+              <template v-else-if="row.status === 'TERMINATED'">已终止：{{ row.terminateReasonName }}</template>
+              <template v-else-if="row.overdueDays > 0">已逾期 {{ row.overdueDays }} 天（宽限 {{ row.graceDays }} 天）</template>
+              <template v-else>宽限 {{ row.graceDays }} 天</template>
+            </div>
+            <div style="font-size: 12px; color: var(--ink-dim)">依据：{{ row.basis }}</div>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div v-if="!immuneTasks.length" class="empty-tip">该猪只暂无免疫计划任务，可到「防疫」页生成</div>
+      <template #footer>
+        <el-button type="primary" @click="immuneDialog = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>

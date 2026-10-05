@@ -40,16 +40,18 @@ public class PigService {
     private final BatchRepository batchRepository;
     private final HouseService houseService;
     private final WithdrawalService withdrawalService;
+    private final ImmuneService immuneService;
 
     public PigService(PigRepository pigRepository, PenRepository penRepository, HouseRepository houseRepository,
                       BatchRepository batchRepository, HouseService houseService,
-                      WithdrawalService withdrawalService) {
+                      WithdrawalService withdrawalService, ImmuneService immuneService) {
         this.pigRepository = pigRepository;
         this.penRepository = penRepository;
         this.houseRepository = houseRepository;
         this.batchRepository = batchRepository;
         this.houseService = houseService;
         this.withdrawalService = withdrawalService;
+        this.immuneService = immuneService;
     }
 
     public List<PigVO> list(String status, String breed, Long penId, String keyword) {
@@ -194,6 +196,10 @@ public class PigService {
             houseService.changePenPigCount(saved.getPenId(), -1);
             saved.setPenId(null);
             saved = pigRepository.save(saved);
+        }
+        // 终态猪只的未完成免疫任务进入可追溯的终止状态（看板清扫为兜底）
+        if (Dict.isTerminalPigStatus(status)) {
+            immuneService.terminateForPig(saved.getId(), status);
         }
         return saved;
     }

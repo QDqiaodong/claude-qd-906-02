@@ -60,6 +60,22 @@ public class VaccineRecord {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    /** 来源免疫计划（手工登记为 null） */
+    @Column(name = "plan_id")
+    private Long planId;
+
+    /** 来源接种任务：唯一，保证同一任务重试不产生重复免疫记录 */
+    @Column(name = "task_id")
+    private Long taskId;
+
+    /** 计划内剂次（手工登记为 null） */
+    @Column(name = "dose_no")
+    private Integer doseNo;
+
+    /** 确认批次号：与任务上的 request_no 对应，用于幂等回放 */
+    @Column(name = "request_no", length = 48)
+    private String requestNo;
+
     /** 是否逾期未做下次免疫 */
     @Transient
     public boolean isOverdue() {

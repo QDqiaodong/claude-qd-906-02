@@ -50,16 +50,19 @@ public class TraceService {
     private final BatchRepository batchRepository;
     private final HouseRepository houseRepository;
     private final FeedBatchRepository feedBatchRepository;
+    private final com.hog.farm.repository.ImmunePlanRepository immunePlanRepository;
 
     public TraceService(TraceRecordRepository traceRepository, VaccineRecordRepository vaccineRepository,
                         PigRepository pigRepository, BatchRepository batchRepository,
-                        HouseRepository houseRepository, FeedBatchRepository feedBatchRepository) {
+                        HouseRepository houseRepository, FeedBatchRepository feedBatchRepository,
+                        com.hog.farm.repository.ImmunePlanRepository immunePlanRepository) {
         this.traceRepository = traceRepository;
         this.vaccineRepository = vaccineRepository;
         this.pigRepository = pigRepository;
         this.batchRepository = batchRepository;
         this.houseRepository = houseRepository;
         this.feedBatchRepository = feedBatchRepository;
+        this.immunePlanRepository = immunePlanRepository;
     }
 
     // ---------------- 免疫 ----------------
@@ -290,6 +293,12 @@ public class TraceService {
         vo.setOperator(record.getOperator());
         vo.setRemark(record.getRemark());
         vo.setOverdue(Boolean.valueOf(record.isOverdue()));
+        vo.setPlanId(record.getPlanId());
+        vo.setDoseNo(record.getDoseNo());
+        if (record.getPlanId() != null) {
+            vo.setPlanCode(immunePlanRepository.findById(record.getPlanId())
+                    .map(com.hog.farm.domain.ImmunePlan::getPlanCode).orElse(""));
+        }
         return vo;
     }
 

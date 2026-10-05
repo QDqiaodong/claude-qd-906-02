@@ -18,6 +18,8 @@ DROP TABLE IF EXISTS trace_target;
 DROP TABLE IF EXISTS trace_record;
 DROP TABLE IF EXISTS shipment_order;
 DROP TABLE IF EXISTS medication_record;
+DROP TABLE IF EXISTS immune_task;
+DROP TABLE IF EXISTS immune_plan;
 DROP TABLE IF EXISTS vaccine_record;
 DROP TABLE IF EXISTS feeding;
 DROP TABLE IF EXISTS transfer;
@@ -159,6 +161,8 @@ CREATE TABLE feeding (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- 免疫记录 ----------------
+-- plan_id / task_id / dose_no / request_no：由免疫计划确认或补种时回填（手工登记为 NULL）；
+-- task_id 唯一：同一接种任务重试不会产生重复免疫记录
 CREATE TABLE vaccine_record (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     pig_id BIGINT NOT NULL,
@@ -169,7 +173,60 @@ CREATE TABLE vaccine_record (
     next_date DATE,
     operator VARCHAR(32),
     remark VARCHAR(128),
-    created_at DATETIME
+    created_at DATETIME,
+    plan_id BIGINT,
+    task_id BIGINT,
+    dose_no INT,
+    request_no VARCHAR(48),
+    UNIQUE KEY uk_vaccine_task (task_id),
+    KEY idx_vaccine_request (request_no),
+    KEY idx_vaccine_pig (pig_id, vaccine_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- 免疫计划规则 ----------------
+-- 按 疫苗 + 适用生长阶段 + 首剂日龄 + 剂次间隔 + 宽限天数 定义；
+-- 第 N 剂计划日期 = 出生日期 + 首剂日龄 + (N-1) × 剂次间隔；超过 计划日期 + 宽限天数 仍未接种 → 漏种
+CREATE TABLE immune_plan (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    plan_code VARCHAR(32) NOT NULL UNIQUE,
+    vaccine_name VARCHAR(64) NOT NULL,
+    stage VARCHAR(16) NOT NULL,
+    first_dose_age_days INT NOT NULL,
+    dose_interval_days INT NOT NULL,
+    total_doses INT NOT NULL,
+    grace_days INT NOT NULL,
+    dose_ml DECIMAL(8,2) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    note VARCHAR(128)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- 接种任务 ----------------
+-- 执行口径：生成时名单快照。任务挂在猪只上，转栏不丢；
+-- 死亡 / 出栏 / 淘汰 / 已有等效接种记录 → TERMINATED（终止原因与时间可追溯）；
+-- uk_task_dose：每头猪、同一计划和剂次只能存在一个任务，完成结果唯一。
+CREATE TABLE immune_task (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    plan_id BIGINT NOT NULL,
+    pig_id BIGINT NOT NULL,
+    ear_tag VARCHAR(32),
+    dose_no INT NOT NULL,
+    planned_date DATE NOT NULL,
+    grace_days INT NOT NULL,
+    pen_id BIGINT,
+    basis VARCHAR(255),
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    terminate_reason VARCHAR(24),
+    terminated_at DATETIME,
+    make_up_date DATE,
+    make_up_reason VARCHAR(128),
+    completed_date DATE,
+    completed_at DATETIME,
+    vaccine_record_id BIGINT,
+    request_no VARCHAR(48),
+    created_at DATETIME,
+    UNIQUE KEY uk_task_dose (plan_id, pig_id, dose_no),
+    KEY idx_task_status (status, planned_date),
+    KEY idx_task_pig (pig_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- 用药记录与休药期 ----------------
@@ -330,19 +387,42 @@ INSERT INTO feeding (feed_batch_id, pen_id, feed_name, feed_type, amount_kg, pig
 (2, 9,  '保育浓缩料 4011','NURSERY',  22.50, 3,  UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 5 DAY,  '张海涛', '自由采食'),
 (6, 16, '哺乳母猪料 567', 'SOW',       4.00, 1,  UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 6 DAY,  '赵德明', '隔离舍单独投喂');
 
-INSERT INTO vaccine_record (pig_id, ear_tag, vaccine_name, dose_ml, vaccine_date, next_date, operator, remark, created_at) VALUES
-(1,  'ET-2601-0101', '猪瘟活疫苗',        2.00, '2026-03-05', '2026-09-05', '周防疫员', '颈部肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 180 DAY),
-(2,  'ET-2601-0102', '猪瘟活疫苗',        2.00, '2026-03-05', '2026-09-05', '周防疫员', '颈部肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 180 DAY),
-(3,  'ET-2601-0103', '口蹄疫 O 型灭活疫苗', 3.00, '2026-04-12', '2026-10-12', '周防疫员', '耳后肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 150 DAY),
-(4,  'ET-2601-0201', '细小病毒灭活疫苗',   2.00, '2026-04-20', NULL, '周防疫员', '配种前免疫', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 145 DAY),
-(5,  'ET-2601-0202', '伪狂犬病活疫苗',     2.00, '2026-05-08', '2026-11-08', '周防疫员', '滴鼻 + 肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 130 DAY),
-(6,  'ET-2512-0006', '猪传染性胃肠炎二联苗', 4.00, '2026-05-18', NULL, '周防疫员', '产前跟胎免疫', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 120 DAY),
-(7,  'ET-2603-0301', '圆环病毒灭活疫苗',   1.00, '2026-05-25', NULL, '周防疫员', '仔猪 14 日龄', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 115 DAY),
-(8,  'ET-2603-0302', '圆环病毒灭活疫苗',   1.00, '2026-05-25', NULL, '周防疫员', '仔猪 14 日龄', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 115 DAY),
-(9,  'ET-2603-0303', '支原体灭活疫苗',     2.00, '2026-06-02', NULL, '周防疫员', '仔猪 21 日龄', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 108 DAY),
-(10, 'ET-2601-0401', '高致病性蓝耳病活疫苗', 2.00, '2026-06-15', '2026-12-15', '周防疫员', '育肥期加强', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 95 DAY),
-(11, 'ET-2601-0402', '猪瘟活疫苗',        2.00, '2026-06-22', '2026-12-22', '周防疫员', '二免', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 88 DAY),
-(13, 'ET-2601-0501', '口蹄疫 O 型灭活疫苗', 3.00, '2026-07-06', '2027-01-06', '周防疫员', '外购猪入场免疫', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 74 DAY);
+INSERT INTO vaccine_record (pig_id, ear_tag, vaccine_name, dose_ml, vaccine_date, next_date, operator, remark, created_at, plan_id, task_id, dose_no, request_no) VALUES
+(1,  'ET-2601-0101', '猪瘟活疫苗',        2.00, '2026-03-05', '2026-09-05', '周防疫员', '颈部肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 180 DAY, NULL, NULL, NULL, NULL),
+(2,  'ET-2601-0102', '猪瘟活疫苗',        2.00, '2026-03-05', '2026-09-05', '周防疫员', '颈部肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 180 DAY, NULL, NULL, NULL, NULL),
+(3,  'ET-2601-0103', '口蹄疫 O 型灭活疫苗', 3.00, '2026-04-12', '2026-10-12', '周防疫员', '耳后肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 150 DAY, NULL, NULL, NULL, NULL),
+(4,  'ET-2601-0201', '细小病毒灭活疫苗',   2.00, '2026-04-20', NULL, '周防疫员', '配种前免疫', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 145 DAY, NULL, NULL, NULL, NULL),
+(5,  'ET-2601-0202', '伪狂犬病活疫苗',     2.00, '2026-05-08', '2026-11-08', '周防疫员', '滴鼻 + 肌注', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 130 DAY, NULL, NULL, NULL, NULL),
+(6,  'ET-2512-0006', '猪传染性胃肠炎二联苗', 4.00, '2026-05-18', NULL, '周防疫员', '产前跟胎免疫', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 120 DAY, NULL, NULL, NULL, NULL),
+(7,  'ET-2603-0301', '圆环病毒灭活疫苗',   1.00, '2026-05-25', NULL, '周防疫员', '仔猪 14 日龄', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 115 DAY, 3, 9, 1, NULL),
+(8,  'ET-2603-0302', '圆环病毒灭活疫苗',   1.00, '2026-05-25', NULL, '周防疫员', '仔猪 14 日龄', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 115 DAY, NULL, NULL, NULL, NULL),
+(9,  'ET-2603-0303', '支原体灭活疫苗',     2.00, '2026-06-02', NULL, '周防疫员', '仔猪 21 日龄', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 108 DAY, NULL, NULL, NULL, NULL),
+(10, 'ET-2601-0401', '高致病性蓝耳病活疫苗', 2.00, '2026-06-15', '2026-12-15', '周防疫员', '育肥期加强', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 95 DAY, NULL, NULL, NULL, NULL),
+(11, 'ET-2601-0402', '猪瘟活疫苗',        2.00, '2026-06-22', '2026-12-22', '周防疫员', '二免', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 88 DAY, 1, 12, 1, NULL),
+(13, 'ET-2601-0501', '口蹄疫 O 型灭活疫苗', 3.00, '2026-07-06', '2027-01-06', '周防疫员', '外购猪入场免疫', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 74 DAY, NULL, NULL, NULL, NULL),
+(13, 'ET-2601-0501', '猪瘟活疫苗',        2.00, '2026-02-05', NULL, '周防疫员', '漏种补种：仔猪腹泻痊愈后补种', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 242 DAY, 1, 6, 1, 'IMM-SEED-260205-01');
+
+-- ---------------- 免疫计划规则种子 ----------------
+INSERT INTO immune_plan (plan_code, vaccine_name, stage, first_dose_age_days, dose_interval_days, total_doses, grace_days, dose_ml, status, note) VALUES
+('IP-2601', '猪瘟活疫苗',           'ALL',      21, 180, 2, 7, 2.00, 'ACTIVE', '全群猪瘟基础免疫：21 日龄首免，180 天后加强'),
+('IP-2602', '口蹄疫 O 型灭活疫苗',   'NURSERY',  35, 30,  2, 5, 3.00, 'ACTIVE', '保育阶段口蹄疫两免'),
+('IP-2603', '圆环病毒灭活疫苗',      'SUCKLING', 14, 21,  1, 7, 1.00, 'ACTIVE', '仔猪 14 日龄圆环单针');
+
+-- ---------------- 接种任务种子（生成时名单快照） ----------------
+-- 覆盖看板各分组：待接种 / 临期（今天到期、宽限期内）/ 漏种 / 已补种 / 已终止（死亡、等效记录）
+INSERT INTO immune_task (plan_id, pig_id, ear_tag, dose_no, planned_date, grace_days, pen_id, basis, status, terminate_reason, terminated_at, make_up_date, make_up_reason, completed_date, completed_at, vaccine_record_id, request_no, created_at) VALUES
+(1, 9,  'ET-2603-0303', 1, '2026-04-08', 7, 9,  '出生 2026-03-18 + 首剂日龄 21 天 → 第 1 剂计划 2026-04-08', 'MISSED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 180 DAY),
+(1, 9,  'ET-2603-0303', 2, '2026-10-05', 7, 9,  '第 1 剂计划 2026-04-08 + 剂次间隔 180 天 × 1 → 第 2 剂计划 2026-10-05', 'PENDING', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 30 DAY),
+(1, 8,  'ET-2603-0302', 1, '2026-04-04', 7, 9,  '出生 2026-03-14 + 首剂日龄 21 天 → 第 1 剂计划 2026-04-04', 'MISSED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 184 DAY),
+(1, 8,  'ET-2603-0302', 2, '2026-10-01', 7, 9,  '第 1 剂计划 2026-04-04 + 剂次间隔 180 天 × 1 → 第 2 剂计划 2026-10-01', 'PENDING', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 30 DAY),
+(1, 10, 'ET-2601-0401', 1, '2026-02-15', 7, 11, '出生 2026-01-25 + 首剂日龄 21 天 → 第 1 剂计划 2026-02-15', 'MISSED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 232 DAY),
+(1, 13, 'ET-2601-0501', 1, '2026-01-29', 7, 14, '出生 2026-01-08 + 首剂日龄 21 天 → 第 1 剂计划 2026-01-29', 'MADE_UP', NULL, NULL, '2026-02-05', '仔猪腹泻痊愈后补种', '2026-02-05', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 242 DAY, 13, 'IMM-SEED-260205-01', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 250 DAY),
+(1, 13, 'ET-2601-0501', 2, '2026-07-28', 7, 14, '第 1 剂计划 2026-01-29 + 剂次间隔 180 天 × 1 → 第 2 剂计划 2026-07-28', 'MISSED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 100 DAY),
+(1, 15, 'ET-2602-0503', 1, '2026-03-08', 7, NULL, '出生 2026-02-15 + 首剂日龄 21 天 → 第 1 剂计划 2026-03-08', 'TERMINATED', 'PIG_DEAD', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 130 DAY, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 220 DAY),
+(3, 7,  'ET-2603-0301', 1, '2026-03-25', 7, 9,  '出生 2026-03-11 + 首剂日龄 14 天 → 第 1 剂计划 2026-03-25', 'TERMINATED', 'EQUIVALENT', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 133 DAY, NULL, NULL, NULL, NULL, 7, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 194 DAY),
+(1, 16, 'ET-2604-0601', 1, '2026-04-26', 7, 16, '出生 2026-04-05 + 首剂日龄 21 天 → 第 1 剂计划 2026-04-26', 'MISSED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 162 DAY),
+(1, 16, 'ET-2604-0601', 2, '2026-10-23', 7, 16, '第 1 剂计划 2026-04-26 + 剂次间隔 180 天 × 1 → 第 2 剂计划 2026-10-23', 'PENDING', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 30 DAY),
+(1, 11, 'ET-2601-0402', 1, '2026-02-17', 7, 11, '出生 2026-01-27 + 首剂日龄 21 天 → 第 1 剂计划 2026-02-17', 'TERMINATED', 'EQUIVALENT', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 105 DAY, NULL, NULL, NULL, NULL, 11, NULL, UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 231 DAY);
 
 INSERT INTO medication_record
 (request_no, pig_id, ear_tag, medicine_name, dose, medication_date, withdrawal_days, operator, remark, created_at, revoked, trace_no) VALUES
