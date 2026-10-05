@@ -159,6 +159,28 @@ public final class Dict {
             "圆环病毒灭活疫苗", "高致病性蓝耳病活疫苗", "细小病毒灭活疫苗",
             "猪传染性胃肠炎二联苗", "支原体灭活疫苗");
 
+    // ---------------- 免疫计划 ----------------
+    /** 免疫计划适用的正常生长阶段；隔离是暂缓照护状态，不作为计划适用阶段 */
+    private static final Map<String, String> IMMUNIZATION_STAGE = Map.of(
+            "GESTATION", "配怀",
+            "FARROWING", "分娩",
+            "NURSERY", "保育",
+            "FINISHING", "育肥");
+
+    private static final Map<String, String> IMMUNIZATION_EXECUTION_MODE = Map.of(
+            "SNAPSHOT", "生成时名单快照",
+            "RECALCULATE", "确认时按现状重算");
+
+    private static final Map<String, String> IMMUNIZATION_TASK_STATUS = Map.of(
+            "PENDING", "待接种",
+            "NEAR_DUE", "临期",
+            "MISSED", "漏种",
+            "COMPLETED", "已完成",
+            "SUPPLEMENTED", "已补种",
+            "TERMINATED", "已终止");
+
+    public static final int IMMUNIZATION_NEAR_DUE_DAYS = 7;
+
     // ---------------- 溯源事件类型 ----------------
     private static final Map<String, String> TRACE_TYPE = Map.of(
             "IMMUNE", "免疫",
@@ -350,6 +372,36 @@ public final class Dict {
 
     public static String feedStatusName(String status) {
         return name(FEED_STATUS, status);
+    }
+
+    public static boolean isValidImmunizationStage(String stage) {
+        return stage != null && IMMUNIZATION_STAGE.containsKey(stage);
+    }
+
+    public static String immunizationStageName(String stage) {
+        return name(IMMUNIZATION_STAGE, stage);
+    }
+
+    public static boolean isValidImmunizationExecutionMode(String mode) {
+        return mode != null && IMMUNIZATION_EXECUTION_MODE.containsKey(mode);
+    }
+
+    public static String immunizationExecutionModeName(String mode) {
+        return name(IMMUNIZATION_EXECUTION_MODE, mode);
+    }
+
+    public static String immunizationExecutionModeText(String mode) {
+        if ("SNAPSHOT".equals(mode)) {
+            return "生成任务时冻结猪只名单和归属栏位；转栏不丢任务，死亡/出栏等仍会终止";
+        }
+        if ("RECALCULATE".equals(mode)) {
+            return "原计划日期保留；确认接种时按猪只当前栏位和生长阶段重新判断适用性";
+        }
+        return "";
+    }
+
+    public static String immunizationTaskStatusName(String status) {
+        return name(IMMUNIZATION_TASK_STATUS, status);
     }
 
     public static boolean isValidTraceType(String type) {

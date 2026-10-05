@@ -45,17 +45,20 @@ public class ShipmentService {
     private final ShipmentOrderRepository shipmentRepository;
     private final WithdrawalService withdrawalService;
     private final TraceService traceService;
+    private final ImmunizationPlanService immunizationPlanService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ShipmentService(BatchRepository batchRepository, PigRepository pigRepository,
                            PenRepository penRepository, ShipmentOrderRepository shipmentRepository,
-                           WithdrawalService withdrawalService, TraceService traceService) {
+                           WithdrawalService withdrawalService, TraceService traceService,
+                           ImmunizationPlanService immunizationPlanService) {
         this.batchRepository = batchRepository;
         this.pigRepository = pigRepository;
         this.penRepository = penRepository;
         this.shipmentRepository = shipmentRepository;
         this.withdrawalService = withdrawalService;
         this.traceService = traceService;
+        this.immunizationPlanService = immunizationPlanService;
     }
 
     /** 不加锁预览：供操作员提交前核对放行、拦截、状态异常三组。 */
@@ -116,9 +119,10 @@ public class ShipmentService {
             }
             pig.setStatus("SOLD");
             pig.setStatusDate(normalized.getShipDate());
+            immunizationPlanService.terminatePigTasks(pig);
             pig.setPenId(null);
             pig.setHouseId(null);
-            pigRepository.save(pig);
+            Pig soldPig = pigRepository.save(pig);
         }
         for (Map.Entry<Long, Integer> entry : penDeltas.entrySet()) {
             penRepository.updatePigCount(entry.getKey(), entry.getValue());

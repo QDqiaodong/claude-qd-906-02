@@ -33,6 +33,8 @@ const batchPenId = ref(null)
 const medDialog = ref(false)
 const medSaving = ref(false)
 const medForm = ref(emptyMedication())
+const immuneDrawer = ref(false)
+const immunePig = ref(null)
 
 function emptyMedication () {
   return {
@@ -173,6 +175,16 @@ function openMedication () {
   medDialog.value = true
 }
 
+async function openImmunization (pig) {
+  immunePig.value = { ...pig, immunization: null }
+  immuneDrawer.value = true
+  try {
+    immunePig.value.immunization = await api.immunization.pigTrace(pig.id)
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
 function makeRequestNo (prefix) {
   if (window.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID().replaceAll('-', '').slice(0, 24).toUpperCase()}`
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`.toUpperCase()
@@ -261,7 +273,7 @@ onMounted(load)
           <span v-else-if="pig.withdrawal?.deadline" class="tag" style="border-color: var(--hog-green); color: var(--hog-green)">
             {{ pig.withdrawal.earliestShipDate }} 可出栏
           </span>
-          <el-dropdown trigger="click" @command="(c) => c === 'edit' ? openEdit(pig) : c === 'del' ? removePig(pig) : changeOne(pig, c)">
+          <el-dropdown trigger="click" @command="(c) => c === 'edit' ? openEdit(pig) : c === 'immunization' ? openImmunization(pig) : c === 'del' ? removePig(pig) : changeOne(pig, c)">
             <el-button size="small" link>操作</el-button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -269,7 +281,8 @@ onMounted(load)
                 <el-dropdown-item command="SOLD">标记出栏</el-dropdown-item>
                 <el-dropdown-item command="DEAD">标记死亡</el-dropdown-item>
                 <el-dropdown-item command="CULLED">标记淘汰</el-dropdown-item>
-                <el-dropdown-item command="edit" divided>编辑</el-dropdown-item>
+                <el-dropdown-item command="immunization" divided>免疫追溯</el-dropdown-item>
+                <el-dropdown-item command="edit">编辑</el-dropdown-item>
                 <el-dropdown-item command="del">删除</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -409,5 +422,58 @@ onMounted(load)
         <el-button type="primary" :loading="medSaving" @click="submitMedication">保存用药登记</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="immuneDrawer" :title="`${immunePig?.earTag || ''} 免疫计划追溯`" direction="rtl" size="560px">
+      <div v-if="immunePig?.immunization">
+        <el-alert
+          :title="`未完成任务 ${immunePig.immunization.openCount} 个，其中漏种 ${immunePig.immunization.missedCount} 个；转栏后的任务按猪只连续保留。`"
+          :type="immunePig.immunization.missedCount ? 'error' : 'info'"
+          :closable="false"
+          style="margin-bottom: 12px"
+        />
+        <div class="section-title">计划任务</div>
+        <div v-for="task in immunePig.immunization.tasks" :key="task.id" class="immune-trace-card">
+          <div style="display:flex; align-items:center; gap:8px">
+            <b>{{ task.vaccineName }} · 第 {{ task.doseNo }}/{{ task.totalDoses }} 剂</b>
+            <el-tag size="small" :type="task.status === 'MISSED' ? 'danger' : task.group === 'DONE' ? 'success' : task.status === 'TERMINATED' ? 'info' : 'warning'">
+              {{ task.statusName }}
+            </el-tag>
+          </div>
+          <div class="pig-sub">计划 {{ task.plannedDate }}，宽限至 {{ task.graceEndDate }}</div>
+          <div class="pig-sub">当前栏位：{{ task.currentPenCode || '无' }}；生成快照：{{ task.snapshotPenCode || '无' }}</div>
+          <div class="pig-sub">依据：{{ task.basisText }}</div>
+          <div v-if="task.terminatedReason" class="pig-sub">终止：{{ task.terminatedReason }}</div>
+          <div v-if="task.actualVaccineDate" class="pig-sub">
+            实际接种 {{ task.actualVaccineDate }}<span v-if="task.overdueDays">，逾期 {{ task.overdueDays }} 天</span>
+            <span v-if="task.supplementReason">；原因：{{ task.supplementReason }}</span>
+          </div>
+        </div>
+        <div v-if="!immunePig.immunization.tasks.length" class="empty-tip">暂无对应计划任务</div>
+
+        <div class="section-title" style="margin-top:16px">实际免疫记录</div>
+        <el-table :data="immunePig.immunization.vaccines" size="small" max-height="260">
+          <el-table-column prop="vaccineDate" label="日期" width="105" />
+          <el-table-column prop="vaccineName" label="疫苗" min-width="130" />
+          <el-table-column label="剂次" width="60"><template #default="{ row }">{{ row.doseNo || '—' }}</template></el-table-column>
+          <el-table-column prop="doseMl" label="剂量" width="70" />
+          <el-table-column prop="operator" label="防疫员" width="90" />
+        </el-table>
+      </div>
+    </el-drawer>
   </div>
 </template>
+
+<style scoped>
+.immune-trace-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+.immune-trace-card .pig-sub {
+  font-size: 12px;
+  color: var(--ink-dim);
+  line-height: 1.7;
+}
+</style>

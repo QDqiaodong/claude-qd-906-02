@@ -8,5 +8,7 @@ public interface VaccineRecordRepository extends JpaRepository<VaccineRecord, Lo
 
     List<VaccineRecord> findAllByOrderByVaccineDateDescIdDesc();
 
-    List<VaccineRecord> findByPigIdOrderByVaccineDateDesc(Long pigId);
+    List<VaccineRecord> findByPigIdOrderByVaccineDateDescIdDesc(Long pigId);
+
+    List<VaccineRecord> findByPigIdAndVaccineNameOrderByVaccineDateAscIdAsc(Long pigId, String vaccineName);
 }

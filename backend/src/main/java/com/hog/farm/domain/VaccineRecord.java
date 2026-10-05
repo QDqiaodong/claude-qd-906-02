@@ -60,6 +60,16 @@ public class VaccineRecord {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    /** 完成免疫计划后回写，保证计划结果与实际免疫记录可互查 */
+    @Column(name = "plan_id")
+    private Long planId;
+
+    @Column(name = "dose_no")
+    private Integer doseNo;
+
+    @Column(name = "outcome_id")
+    private Long outcomeId;
+
     /** 是否逾期未做下次免疫 */
     @Transient
     public boolean isOverdue() {

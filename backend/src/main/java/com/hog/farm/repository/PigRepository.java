@@ -34,6 +34,10 @@ public interface PigRepository extends JpaRepository<Pig, Long> {
     @Query("select p from Pig p where p.id in :ids order by p.id asc")
     List<Pig> lockByIds(@Param("ids") List<Long> ids);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Pig p where p.id = :id")
+    java.util.Optional<Pig> lockById(@Param("id") Long id);
+
     @Query("select p from Pig p where p.penId = :penId order by p.id asc")
     List<Pig> findByPenIdOrderByIdAsc(@Param("penId") Long penId);
 

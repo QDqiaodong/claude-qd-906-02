@@ -43,10 +43,12 @@ public class TransferService {
     private final HouseRepository houseRepository;
     private final PigRepository pigRepository;
     private final HouseService houseService;
+    private final ImmunizationPlanService immunizationPlanService;
 
     public TransferService(TransferRepository transferRepository, FeedingRepository feedingRepository,
                            FeedBatchRepository feedBatchRepository, PenRepository penRepository,
-                           HouseRepository houseRepository, PigRepository pigRepository, HouseService houseService) {
+                           HouseRepository houseRepository, PigRepository pigRepository, HouseService houseService,
+                           ImmunizationPlanService immunizationPlanService) {
         this.transferRepository = transferRepository;
         this.feedingRepository = feedingRepository;
         this.feedBatchRepository = feedBatchRepository;
@@ -54,6 +56,7 @@ public class TransferService {
         this.houseRepository = houseRepository;
         this.pigRepository = pigRepository;
         this.houseService = houseService;
+        this.immunizationPlanService = immunizationPlanService;
     }
 
     // ---------------- 转栏 ----------------
@@ -135,7 +138,8 @@ public class TransferService {
                 pig.setStatus("TRANSFERRED");
             }
             pig.setStatusDate(date);
-            pigRepository.save(pig);
+            Pig movedPig = pigRepository.save(pig);
+            immunizationPlanService.syncTransfer(movedPig, target.getId(), target.getHouseId());
         }
         houseService.changePenPigCount(target.getId(), pigs.size());
         fromPenCounts.forEach((penId, count) -> houseService.changePenPigCount(penId, -count));

@@ -83,6 +83,16 @@ const medication = {
   revoke: (id, data) => call(http.post(`/medication/${id}/revoke`, data))
 }
 
+const immunization = {
+  plans: () => call(http.get('/immunization/plans')),
+  createPlan: (data) => call(http.post('/immunization/plans', data)),
+  updatePlan: (id, data) => call(http.put(`/immunization/plans/${id}`, data)),
+  tasks: () => call(http.get('/immunization/tasks')),
+  generate: (data) => call(http.post('/immunization/tasks/generate', data || {})),
+  confirm: (data) => call(http.post('/immunization/confirm', data)),
+  pigTrace: (pigId) => call(http.get(`/immunization/pig/${pigId}`))
+}
+
 const trace = {
   vaccines: () => call(http.get('/trace/vaccine')),
   createVaccine: (data) => call(http.post('/trace/vaccine', data)),
@@ -100,4 +110,4 @@ const stats = {
   dict: () => call(http.get('/stats/dict'))
 }
 
-export default { http, house, pig, batch, medication, transfer, trace, stats }
+export default { http, house, pig, batch, medication, immunization, transfer, trace, stats }

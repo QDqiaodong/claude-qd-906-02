@@ -186,6 +186,7 @@ public final class Views {
         private String statusDate;
         private String note;
         private WithdrawalVO withdrawal = new WithdrawalVO();
+        private PigImmunizationTraceVO immunization = new PigImmunizationTraceVO();
     }
 
     /** 出栏批次卡片 */
@@ -271,9 +272,145 @@ public final class Views {
         private BigDecimal doseMl;
         private String vaccineDate;
         private String nextDate;
+        private Long planId;
+        private Integer doseNo;
+        private Long outcomeId;
         private String operator;
         private String remark;
         private Boolean overdue;
+    }
+
+    /** 免疫计划规则 */
+    @Data
+    public static class ImmunizationPlanVO {
+        private Long id;
+        private String planCode;
+        private String planName;
+        private String vaccineName;
+        private String vaccineKey;
+        private String growthStage;
+        private String growthStageName;
+        private Integer firstDoseAgeDays;
+        private Integer doseIntervalDays;
+        private Integer totalDoses;
+        private Integer graceDays;
+        private BigDecimal defaultDoseMl;
+        private String executionMode;
+        private String executionModeName;
+        private String executionModeText;
+        private String status;
+        private String statusName;
+        private String note;
+        private String createdAt;
+        private Integer openTaskCount = 0;
+        private Integer nearDueCount = 0;
+        private Integer missedCount = 0;
+    }
+
+    /** 免疫任务行 */
+    @Data
+    public static class ImmunizationTaskVO {
+        private Long id;
+        private Long planId;
+        private String planCode;
+        private String planName;
+        private String vaccineName;
+        private String growthStage;
+        private String growthStageName;
+        private String executionMode;
+        private String executionModeName;
+        private Long pigId;
+        private String earTag;
+        private Integer doseNo;
+        private Integer totalDoses;
+        private String currentPenCode;
+        private String currentHouseCode;
+        private Long currentPenId;
+        private String snapshotPenCode;
+        private String snapshotHouseCode;
+        private Long snapshotPenId;
+        private String basisText;
+        private String plannedDate;
+        private String graceEndDate;
+        private String status;
+        private String statusName;
+        private String group;
+        private String generatedAt;
+        private String actualVaccineDate;
+        private Integer overdueDays;
+        private String supplementReason;
+        private String terminatedReasonCode;
+        private String terminatedReason;
+        private String terminatedAt;
+        private String operator;
+        private BigDecimal doseMl;
+        private Boolean terminal = Boolean.FALSE;
+    }
+
+    /** 生成任务时的逐头解释 */
+    @Data
+    public static class GenerateItemVO {
+        private Long pigId;
+        private String earTag;
+        private String penCode;
+        private Integer doseNo;
+        private String plannedDate;
+        private String reason;
+        /** INCLUDED 纳入 / DEFERRED 暂缓 / NOT_APPLICABLE 不再适用 / EXISTING 已存在 */
+        private String category;
+        private String categoryName;
+        private Long taskId;
+    }
+
+    /** 批量确认的逐头结果 */
+    @Data
+    public static class ImmunizationResultVO {
+        private String requestNo;
+        private Long taskId;
+        private Long planId;
+        private Long pigId;
+        private String earTag;
+        private Integer doseNo;
+        private String resultStatus;
+        private String resultStatusName;
+        private String reason;
+        private Long outcomeId;
+        private Long vaccineRecordId;
+        private String vaccineDate;
+        private String plannedDate;
+        private String graceEndDate;
+        private Integer overdueDays;
+        private String taskStatus;
+        private String taskStatusName;
+        private String supplementReason;
+    }
+
+    /** 生成 / 确认汇总 */
+    @Data
+    public static class ImmunizationBatchResultVO {
+        private String requestNo;
+        private Integer totalCount = 0;
+        private Integer includedCount = 0;
+        private Integer deferredCount = 0;
+        private Integer notApplicableCount = 0;
+        private Integer existingCount = 0;
+        private Integer successCount = 0;
+        private Integer failedCount = 0;
+        private String message;
+        private List<GenerateItemVO> includedItems = new ArrayList<>();
+        private List<GenerateItemVO> deferredItems = new ArrayList<>();
+        private List<GenerateItemVO> notApplicableItems = new ArrayList<>();
+        private List<GenerateItemVO> existingItems = new ArrayList<>();
+        private List<ImmunizationResultVO> results = new ArrayList<>();
+    }
+
+    /** 猪只详情里的免疫追溯 */
+    @Data
+    public static class PigImmunizationTraceVO {
+        private List<ImmunizationTaskVO> tasks = new ArrayList<>();
+        private List<VaccineVO> vaccines = new ArrayList<>();
+        private Integer openCount = 0;
+        private Integer missedCount = 0;
     }
 
     /** 休药期状态 */

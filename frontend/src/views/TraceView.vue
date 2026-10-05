@@ -253,6 +253,9 @@ onMounted(async () => {
           <el-table-column prop="vaccineName" label="疫苗" />
           <el-table-column prop="doseMl" label="剂量 ml" width="78" />
           <el-table-column prop="vaccineDate" label="免疫日" width="105" />
+          <el-table-column label="计划剂次" width="80">
+            <template #default="{ row }">{{ row.planId ? `第${row.doseNo || '—'}剂` : '手工' }}</template>
+          </el-table-column>
           <el-table-column prop="nextDate" label="下次" width="105" />
           <el-table-column prop="operator" label="免疫员" width="85" />
         </el-table>

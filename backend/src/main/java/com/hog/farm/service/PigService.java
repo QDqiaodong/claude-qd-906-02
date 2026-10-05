@@ -40,16 +40,18 @@ public class PigService {
     private final BatchRepository batchRepository;
     private final HouseService houseService;
     private final WithdrawalService withdrawalService;
+    private final ImmunizationPlanService immunizationPlanService;
 
     public PigService(PigRepository pigRepository, PenRepository penRepository, HouseRepository houseRepository,
                       BatchRepository batchRepository, HouseService houseService,
-                      WithdrawalService withdrawalService) {
+                      WithdrawalService withdrawalService, ImmunizationPlanService immunizationPlanService) {
         this.pigRepository = pigRepository;
         this.penRepository = penRepository;
         this.houseRepository = houseRepository;
         this.batchRepository = batchRepository;
         this.houseService = houseService;
         this.withdrawalService = withdrawalService;
+        this.immunizationPlanService = immunizationPlanService;
     }
 
     public List<PigVO> list(String status, String breed, Long penId, String keyword) {
@@ -175,6 +177,7 @@ public class PigService {
         if (oldPenId != null && !oldPenId.equals(saved.getPenId())) {
             houseService.changePenPigCount(oldPenId, -1);
         }
+        immunizationPlanService.syncTransfer(saved, saved.getPenId(), saved.getHouseId());
         return saved;
     }
 
@@ -189,10 +192,14 @@ public class PigService {
         pig.setStatus(status);
         pig.setStatusDate(LocalDate.now());
         Pig saved = pigRepository.save(pig);
-        // 出栏 / 死亡 / 淘汰后从栏位释放
+        if (Dict.isTerminalPigStatus(status)) {
+            immunizationPlanService.terminatePigTasks(saved);
+        }
+        // 出栏 / 死亡 / 淘汰后从栏位释放（任务已保留最后归属）
         if (Dict.isTerminalPigStatus(status) && saved.getPenId() != null) {
             houseService.changePenPigCount(saved.getPenId(), -1);
             saved.setPenId(null);
+            saved.setHouseId(null);
             saved = pigRepository.save(saved);
         }
         return saved;
@@ -319,6 +326,7 @@ public class PigService {
         vo.setStatusDate(pig.getStatusDate() == null ? null : pig.getStatusDate().toString());
         vo.setNote(pig.getNote());
         vo.setWithdrawal(withdrawalService.forPig(pig.getId()));
+        vo.setImmunization(immunizationPlanService.traceForPig(pig.getId()));
         return vo;
     }
 

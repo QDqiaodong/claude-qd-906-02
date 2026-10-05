@@ -50,16 +50,19 @@ public class TraceService {
     private final BatchRepository batchRepository;
     private final HouseRepository houseRepository;
     private final FeedBatchRepository feedBatchRepository;
+    private final ImmunizationPlanService immunizationPlanService;
 
     public TraceService(TraceRecordRepository traceRepository, VaccineRecordRepository vaccineRepository,
                         PigRepository pigRepository, BatchRepository batchRepository,
-                        HouseRepository houseRepository, FeedBatchRepository feedBatchRepository) {
+                        HouseRepository houseRepository, FeedBatchRepository feedBatchRepository,
+                        ImmunizationPlanService immunizationPlanService) {
         this.traceRepository = traceRepository;
         this.vaccineRepository = vaccineRepository;
         this.pigRepository = pigRepository;
         this.batchRepository = batchRepository;
         this.houseRepository = houseRepository;
         this.feedBatchRepository = feedBatchRepository;
+        this.immunizationPlanService = immunizationPlanService;
     }
 
     // ---------------- 免疫 ----------------
@@ -111,7 +114,9 @@ public class TraceService {
         record.setOperator(request.getOperator());
         record.setRemark(request.getRemark());
         record.setCreatedAt(LocalDateTime.now());
-        return toVaccineVO(vaccineRepository.save(record));
+        VaccineRecord savedRecord = vaccineRepository.save(record);
+        immunizationPlanService.handleExternalVaccine(savedRecord);
+        return toVaccineVO(savedRecord);
     }
 
     // ---------------- 溯源（@ManyToAny） ----------------
@@ -287,6 +292,9 @@ public class TraceService {
         vo.setDoseMl(record.getDoseMl());
         vo.setVaccineDate(record.getVaccineDate() == null ? null : record.getVaccineDate().toString());
         vo.setNextDate(record.getNextDate() == null ? null : record.getNextDate().toString());
+        vo.setPlanId(record.getPlanId());
+        vo.setDoseNo(record.getDoseNo());
+        vo.setOutcomeId(record.getOutcomeId());
         vo.setOperator(record.getOperator());
         vo.setRemark(record.getRemark());
         vo.setOverdue(Boolean.valueOf(record.isOverdue()));

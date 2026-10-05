@@ -18,6 +18,10 @@ DROP TABLE IF EXISTS trace_target;
 DROP TABLE IF EXISTS trace_record;
 DROP TABLE IF EXISTS shipment_order;
 DROP TABLE IF EXISTS medication_record;
+DROP TABLE IF EXISTS immunization_attempt;
+DROP TABLE IF EXISTS immunization_outcome;
+DROP TABLE IF EXISTS immunization_task;
+DROP TABLE IF EXISTS immunization_plan;
 DROP TABLE IF EXISTS vaccine_record;
 DROP TABLE IF EXISTS feeding;
 DROP TABLE IF EXISTS transfer;
@@ -169,7 +173,101 @@ CREATE TABLE vaccine_record (
     next_date DATE,
     operator VARCHAR(32),
     remark VARCHAR(128),
-    created_at DATETIME
+    created_at DATETIME,
+    plan_id BIGINT,
+    dose_no INT,
+    outcome_id BIGINT,
+    KEY idx_vaccine_plan (pig_id, plan_id, dose_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- 免疫计划 ----------------
+-- execution_mode 明确业务口径：SNAPSHOT 生成时名单快照；RECALCULATE 确认时按猪只现状重算。
+CREATE TABLE immunization_plan (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    plan_code VARCHAR(32) NOT NULL UNIQUE,
+    plan_name VARCHAR(64) NOT NULL,
+    vaccine_name VARCHAR(64) NOT NULL,
+    vaccine_key VARCHAR(64) NOT NULL,
+    growth_stage VARCHAR(24) NOT NULL,
+    first_dose_age_days INT NOT NULL,
+    dose_interval_days INT NOT NULL,
+    total_doses INT NOT NULL,
+    grace_days INT NOT NULL,
+    default_dose_ml DECIMAL(8,2),
+    execution_mode VARCHAR(16) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME,
+    note VARCHAR(255),
+    KEY idx_plan_stage (growth_stage, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- 免疫任务 ----------------
+-- 任务以猪只为锚点，snapshot_* 保留生成时归属，current_* 随转栏更新。
+CREATE TABLE immunization_task (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    plan_id BIGINT NOT NULL,
+    pig_id BIGINT NOT NULL,
+    ear_tag VARCHAR(32),
+    dose_no INT NOT NULL,
+    snapshot_pen_id BIGINT,
+    snapshot_house_id BIGINT,
+    current_pen_id BIGINT,
+    current_house_id BIGINT,
+    basis_text VARCHAR(500),
+    planned_date DATE NOT NULL,
+    grace_end_date DATE NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    generated_at DATETIME,
+    status_updated_at DATETIME,
+    actual_vaccine_date DATE,
+    overdue_days INT DEFAULT 0,
+    supplement_reason VARCHAR(255),
+    terminated_reason_code VARCHAR(32),
+    terminated_reason VARCHAR(255),
+    terminated_at DATETIME,
+    KEY uk_task_plan_pig_dose (plan_id, pig_id, dose_no),
+    KEY idx_task_status_date (status, planned_date),
+    KEY idx_task_pig (pig_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- 免疫完成结果 ----------------
+-- 成功结果唯一；局部失败只写 attempt，不占剂次唯一结果。
+CREATE TABLE immunization_outcome (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    request_no VARCHAR(64) NOT NULL UNIQUE,
+    task_id BIGINT NOT NULL UNIQUE,
+    plan_id BIGINT NOT NULL,
+    pig_id BIGINT NOT NULL,
+    dose_no INT NOT NULL,
+    vaccine_record_id BIGINT,
+    vaccine_name VARCHAR(64),
+    dose_ml DECIMAL(8,2),
+    vaccine_date DATE NOT NULL,
+    result_type VARCHAR(16) NOT NULL,
+    supplement_reason VARCHAR(255),
+    overdue_days INT DEFAULT 0,
+    operator VARCHAR(32),
+    remark VARCHAR(255),
+    created_at DATETIME,
+    UNIQUE KEY uk_task_result (plan_id, pig_id, dose_no),
+    KEY idx_outcome_pig (pig_id, vaccine_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- 免疫确认逐头尝试 ----------------
+CREATE TABLE immunization_attempt (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    request_no VARCHAR(64) NOT NULL,
+    task_id BIGINT,
+    plan_id BIGINT,
+    pig_id BIGINT,
+    dose_no INT,
+    result_status VARCHAR(16) NOT NULL,
+    reason VARCHAR(500),
+    outcome_id BIGINT,
+    operator VARCHAR(32),
+    created_at DATETIME,
+    KEY idx_attempt_request (request_no, id),
+    KEY idx_attempt_pig (pig_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- 用药记录与休药期 ----------------
@@ -343,6 +441,12 @@ INSERT INTO vaccine_record (pig_id, ear_tag, vaccine_name, dose_ml, vaccine_date
 (10, 'ET-2601-0401', '高致病性蓝耳病活疫苗', 2.00, '2026-06-15', '2026-12-15', '周防疫员', '育肥期加强', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 95 DAY),
 (11, 'ET-2601-0402', '猪瘟活疫苗',        2.00, '2026-06-22', '2026-12-22', '周防疫员', '二免', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 88 DAY),
 (13, 'ET-2601-0501', '口蹄疫 O 型灭活疫苗', 3.00, '2026-07-06', '2027-01-06', '周防疫员', '外购猪入场免疫', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 74 DAY);
+
+INSERT INTO immunization_plan
+(plan_code, plan_name, vaccine_name, vaccine_key, growth_stage, first_dose_age_days, dose_interval_days, total_doses, grace_days, default_dose_ml, execution_mode, status, created_at, note) VALUES
+('IP-FMD-FINISH', '育肥口蹄疫加强免疫', '口蹄疫 O 型灭活疫苗', '口蹄疫 O 型灭活疫苗', 'FINISHING', 180, 120, 2, 7, 3.00, 'SNAPSHOT', 'ACTIVE', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 30 DAY, '生成时冻结名单；转栏后任务跟随猪只，不按新栏位重算'),
+('IP-PCV-NURSERY', '保育圆环病毒首免', '圆环病毒灭活疫苗', '圆环病毒灭活疫苗', 'NURSERY', 14, 21, 2, 7, 1.00, 'RECALCULATE', 'ACTIVE', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 30 DAY, '确认时按当前生长阶段复核；隔离暂缓，转出阶段则终止'),
+('IP-CSF-GESTATION', '配怀猪瘟季度加强', '猪瘟活疫苗', '猪瘟活疫苗', 'GESTATION', 240, 180, 2, 10, 2.00, 'RECALCULATE', 'ACTIVE', UTC_TIMESTAMP() + INTERVAL 8 HOUR - INTERVAL 30 DAY, '已有等效接种的猪只会进入可追溯终止态');
 
 INSERT INTO medication_record
 (request_no, pig_id, ear_tag, medicine_name, dose, medication_date, withdrawal_days, operator, remark, created_at, revoked, trace_no) VALUES
